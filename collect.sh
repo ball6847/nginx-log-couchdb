@@ -7,27 +7,25 @@ COUCHDB_ENDPOINT="http://couchdb:5984/nginx_access_log"
 # create log file if not exists
 touch $NGINX_ACCESS
 
-# check access log file existence
+IFS='
+'
+
 while true
 do
-    if [ -f "$NGINX_ACCESS" ]; then
-        # rename to new file
-        mv $NGINX_ACCESS $TMP_FILENAME
+    SIZE="$(stat -c "%s" $NGINX_ACCESS)"
 
-        # force nginx to create new log file
-        nginx -s reload
+    if [ $SIZE != 0 ]; then
+        LINE="$(cat $NGINX_ACCESS | wc -l)"
+        BUFFER="$(sed -n "1,${LINE}p" < $NGINX_ACCESS)"
 
-        # process the file line by line
-        while read -r JSON
+        for JSON in $BUFFER
         do
             curl -H 'Content-Type: application/json' \
                 -X POST $COUCHDB_ENDPOINT \
                 -d "$JSON"
+        done
 
-        done < $TMP_FILENAME
-
-        # clear file when finished
-        rm -f $TMP_FILENAME
+        tail -n +$LINE $NGINX_ACCESS > $NGINX_ACCESS
     fi
 
     # wait 1 sec to process another round
